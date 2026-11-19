@@ -57,7 +57,7 @@ class DashcamService : LifecycleService() {
     private var isIntendedToKeepRecording = false
     private var sessionStartTime = 0L
     private var timerJob: Job? = null
-
+    private var lastNotificationTime = 0L
     inner class LocalBinder : Binder() {
         fun getService(): DashcamService = this@DashcamService
     }
@@ -163,10 +163,19 @@ class DashcamService : LifecycleService() {
         _isRecording.value = true
         
         sessionStartTime = System.currentTimeMillis()
+        lastNotificationTime = sessionStartTime
         timerJob?.cancel()
         timerJob = lifecycleScope.launch {
             while (true) {
-                _recordingDuration.value = System.currentTimeMillis() - sessionStartTime
+                val now = System.currentTimeMillis()
+                _recordingDuration.value = now - sessionStartTime
+                
+                // Fire a notification every 30 minutes (30 * 60 * 1000 ms)
+                if (now - lastNotificationTime >= 1800000L) {
+                    lastNotificationTime = now
+                    sendUpdateNotification()
+                }
+                
                 delay(1000)
             }
         }
@@ -202,7 +211,25 @@ class DashcamService : LifecycleService() {
             )
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
+            
+            val updateChannel = NotificationChannel(
+                "dashcam_update_channel",
+                "Dashcam Updates",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+            manager.createNotificationChannel(updateChannel)
         }
+    }
+
+    private fun sendUpdateNotification() {
+        val notification = NotificationCompat.Builder(this, "dashcam_update_channel")
+            .setContentTitle("Dashcam is running")
+            .setContentText("Still recording smoothly in the background.")
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setAutoCancel(true)
+            .build()
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(2, notification)
     }
 
     private fun createNotification(): android.app.Notification {
