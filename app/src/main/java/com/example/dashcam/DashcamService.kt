@@ -101,14 +101,49 @@ class DashcamService : LifecycleService() {
                 .setQualitySelector(QualitySelector.from(Quality.HD))
                 .build()
             
-            videoCapture = VideoCapture.withOutput(recorder)
+            val vCap = VideoCapture.withOutput(recorder)
+            videoCapture = vCap
+
+            // Create timestamp overlay effect on recorded video frames
+            val overlayEffect = androidx.camera.effects.OverlayEffect(
+                androidx.camera.effects.OverlayEffect.VIDEO_CAPTURE,
+                0,
+                android.os.Handler(android.os.Looper.getMainLooper())
+            ) { frame ->
+                try {
+                    val canvas = frame.overlayCanvas
+                    val height = canvas.height
+
+                    val paint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.YELLOW
+                        textSize = (height * 0.045f).coerceAtLeast(24f)
+                        isAntiAlias = true
+                        typeface = android.graphics.Typeface.DEFAULT_BOLD
+                        setShadowLayer(6f, 3f, 3f, android.graphics.Color.BLACK)
+                    }
+
+                    val timeStamp = SimpleDateFormat("MMM dd, yyyy  HH:mm:ss", Locale.US).format(Date())
+                    
+                    val x = 30f
+                    val y = height - 40f
+                    canvas.drawText(timeStamp, x, y, paint)
+                } catch (e: Exception) {
+                    Log.e("DashcamService", "Overlay draw error", e)
+                }
+                true
+            }
+
+            val useCaseGroup = androidx.camera.core.UseCaseGroup.Builder()
+                .addUseCase(vCap)
+                .addEffect(overlayEffect)
+                .build()
 
             try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
                     this,
                     CameraSelector.DEFAULT_BACK_CAMERA,
-                    videoCapture
+                    useCaseGroup
                 )
                 isCameraReady = true
                 if (pendingStart) {

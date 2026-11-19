@@ -51,6 +51,7 @@ dependencies {
     implementation("androidx.camera:camera-camera2:${cameraxVersion}")
     implementation("androidx.camera:camera-lifecycle:${cameraxVersion}")
     implementation("androidx.camera:camera-video:${cameraxVersion}")
+    implementation("androidx.camera:camera-effects:${cameraxVersion}")
 
     // WorkManager for background cleanup
     implementation("androidx.work:work-runtime-ktx:2.10.0")
