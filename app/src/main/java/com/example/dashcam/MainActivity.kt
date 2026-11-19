@@ -163,11 +163,32 @@ class MainActivity : ComponentActivity() {
             )
             
             Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = { launchWazeAndRecord() },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1)),
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .padding(bottom = 12.dp)
+            ) {
+                Text("🚀 Start & Open Waze", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+
+            Button(
+                onClick = { openAccessibilitySettings() },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF512DA8)),
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .padding(bottom = 16.dp)
+            ) {
+                Text("⚙️ Enable Waze Auto-Detect", fontSize = 14.sp, color = Color.White)
+            }
             
             Text(
                 text = "Storage used: $storageMB MB",
                 color = Color.Gray,
-                fontSize = 16.sp
+                fontSize = 16.sp,
+                modifier = Modifier.padding(bottom = 12.dp)
             )
 
             var showFileManagerDialog by remember { mutableStateOf(false) }
@@ -327,6 +348,33 @@ class MainActivity : ComponentActivity() {
                 // Final fallback
                 Toast.makeText(this, "Clips saved in Movies/Dashcam", Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    private fun launchWazeAndRecord() {
+        if (dashcamService?.isRecording?.value != true) {
+            StorageManager.cleanup(this)
+            sendCommandToService("START")
+        }
+        val wazeIntent = packageManager.getLaunchIntentForPackage("com.waze")
+        if (wazeIntent != null) {
+            startActivity(wazeIntent)
+        } else {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.waze")))
+            } catch (e: Exception) {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.waze")))
+            }
+        }
+    }
+
+    private fun openAccessibilitySettings() {
+        try {
+            val intent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            startActivity(intent)
+            Toast.makeText(this, "Enable 'Dashcam' under Installed Apps to auto-start when Waze opens", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Unable to open Accessibility Settings", Toast.LENGTH_SHORT).show()
         }
     }
 }
