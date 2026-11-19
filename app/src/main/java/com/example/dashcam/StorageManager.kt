@@ -5,6 +5,9 @@ import android.content.Context
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object StorageManager {
     private const val TAG = "StorageManager"
@@ -140,6 +143,104 @@ object StorageManager {
         return totalSizeBytes / (1024 * 1024)
     }
 
+    fun getAllVideos(context: Context): List<DashcamVideoFile> {
+        val list = mutableListOf<DashcamVideoFile>()
+        
+        // 1. Try direct files
+        try {
+            val folder = java.io.File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+                FOLDER_NAME
+            )
+            if (folder.exists() && folder.isDirectory) {
+                val files = folder.listFiles()
+                if (files != null) {
+                    val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm:ss", Locale.getDefault())
+                    for (file in files.sortedByDescending { it.lastModified() }) {
+                        if (file.name.endsWith(".mp4") || file.name.endsWith(".m4v")) {
+                            val sizeMB = String.format(Locale.US, "%.1f MB", file.length() / (1024.0 * 1024.0))
+                            val dateStr = dateFormat.format(Date(file.lastModified()))
+                            list.add(DashcamVideoFile(
+                                id = null,
+                                name = file.name,
+                                sizeMB = sizeMB,
+                                formattedDate = dateStr,
+                                uri = null,
+                                file = file
+                            ))
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching direct files", e)
+        }
+
+        // 2. MediaStore query if direct files returned empty
+        if (list.isEmpty()) {
+            val projection = arrayOf(
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.SIZE,
+                MediaStore.Video.Media.DATE_ADDED
+            )
+            val selection = "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ?"
+            val selectionArgs = arrayOf("%${Environment.DIRECTORY_MOVIES}/$FOLDER_NAME%")
+            val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
+
+            context.contentResolver.query(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                sortOrder
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
+
+                val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm:ss", Locale.getDefault())
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val name = cursor.getString(nameCol) ?: "Video_$id.mp4"
+                    val size = cursor.getLong(sizeCol)
+                    val dateSec = cursor.getLong(dateCol)
+                    val sizeMB = String.format(Locale.US, "%.1f MB", size / (1024.0 * 1024.0))
+                    val dateStr = dateFormat.format(Date(dateSec * 1000L))
+                    val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+
+                    list.add(DashcamVideoFile(
+                        id = id,
+                        name = name,
+                        sizeMB = sizeMB,
+                        formattedDate = dateStr,
+                        uri = uri,
+                        file = null
+                    ))
+                }
+            }
+        }
+
+        return list
+    }
+
+    fun deleteVideoItem(context: Context, item: DashcamVideoFile) {
+        try {
+            item.file?.let {
+                if (it.exists()) it.delete()
+            }
+            item.id?.let {
+                deleteVideo(context, it)
+            }
+            item.uri?.let {
+                context.contentResolver.delete(it, null, null)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting video item", e)
+        }
+    }
+
     private fun deleteVideo(context: Context, id: Long) {
         val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
         context.contentResolver.delete(uri, null, null)
@@ -147,3 +248,12 @@ object StorageManager {
 
     private data class VideoItem(val id: Long, val size: Long, val dateAdded: Long)
 }
+
+data class DashcamVideoFile(
+    val id: Long?,
+    val name: String,
+    val sizeMB: String,
+    val formattedDate: String,
+    val uri: android.net.Uri?,
+    val file: java.io.File?
+)

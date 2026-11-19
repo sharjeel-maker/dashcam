@@ -129,7 +129,7 @@ class DashcamService : LifecycleService() {
         StorageManager.cleanup(this)
 
         // 2. Prep MediaStore output
-        val name = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date())
+        val name = "Dashcam_" + SimpleDateFormat("MMM-dd-yyyy_HH-mm-ss", Locale.US).format(Date())
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")

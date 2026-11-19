@@ -170,22 +170,110 @@ class MainActivity : ComponentActivity() {
                 fontSize = 16.sp
             )
 
-            Spacer(modifier = Modifier.weight(1f))
+            var showFileManagerDialog by remember { mutableStateOf(false) }
+
+            Button(
+                onClick = { showFileManagerDialog = true },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Text("Manage / Delete Saved Videos", color = Color.White)
+            }
 
             Button(
                 onClick = { openVideosFolder() },
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 12.dp)
             ) {
-                Text("Open videos folder")
+                Text("Open videos in File Manager")
             }
 
             Button(
                 onClick = { shareLatestVideo(this@MainActivity) },
-                modifier = Modifier.padding(bottom = 48.dp)
+                modifier = Modifier.padding(bottom = 32.dp)
             ) {
                 Text("Share latest clip to WhatsApp")
             }
+
+            if (showFileManagerDialog) {
+                VideoManagerDialog(
+                    onDismiss = { showFileManagerDialog = false }
+                )
+            }
         }
+    }
+
+    @Composable
+    fun VideoManagerDialog(onDismiss: () -> Unit) {
+        var videoList by remember { mutableStateOf(StorageManager.getAllVideos(this)) }
+
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Text(
+                    text = "Saved Dashcam Videos (${videoList.size})",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                if (videoList.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No recorded videos found.", color = Color.Gray)
+                    }
+                } else {
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 400.dp)
+                    ) {
+                        androidx.compose.foundation.lazy.items(videoList) { video ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = video.name,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = "${video.formattedDate} • ${video.sizeMB}",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                                Button(
+                                    onClick = {
+                                        StorageManager.deleteVideoItem(this@MainActivity, video)
+                                        videoList = StorageManager.getAllVideos(this@MainActivity)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Delete", fontSize = 12.sp, color = Color.White)
+                                }
+                            }
+                            Divider(color = Color.LightGray.copy(alpha = 0.3f))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Close")
+                }
+            }
+        )
     }
 
     private fun shareLatestVideo(context: Context) {
