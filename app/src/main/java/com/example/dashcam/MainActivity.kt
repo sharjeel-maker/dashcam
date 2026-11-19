@@ -14,6 +14,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -52,6 +53,7 @@ class MainActivity : ComponentActivity() {
     ) { permissions ->
         if (permissions.values.all { it }) {
             Toast.makeText(this, "Permissions granted", Toast.LENGTH_SHORT).show()
+            sendCommandToService("START")
         } else {
             Toast.makeText(this, "Permissions denied. App cannot record.", Toast.LENGTH_LONG).show()
         }
@@ -68,7 +70,6 @@ class MainActivity : ComponentActivity() {
             cleanupWork
         )
 
-        // Request permissions on startup
         val permissions = mutableListOf(
             Manifest.permission.CAMERA,
             Manifest.permission.FOREGROUND_SERVICE,
@@ -77,7 +78,16 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        permissionLauncher.launch(permissions.toTypedArray())
+        
+        val permissionsToRequest = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+
+        if (permissionsToRequest.isEmpty()) {
+            sendCommandToService("START")
+        } else {
+            permissionLauncher.launch(permissionsToRequest.toTypedArray())
+        }
 
         setContent {
             DashcamUI()
@@ -103,6 +113,7 @@ class MainActivity : ComponentActivity() {
     fun DashcamUI() {
         val isRecording = dashcamService?.isRecording?.collectAsState(initial = false)?.value ?: false
         val duration = dashcamService?.recordingDuration?.collectAsState(initial = 0L)?.value ?: 0L
+        val storageMB = dashcamService?.storageUsedMB?.collectAsState(initial = 0L)?.value ?: 0L
 
         // Format duration mm:ss
         val minutes = (duration / 1000) / 60
@@ -148,6 +159,14 @@ class MainActivity : ComponentActivity() {
                 text = if (isRecording) "Recording... $timeString" else "Idle",
                 color = Color.White,
                 fontSize = 20.sp
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                text = "Storage used: $storageMB MB",
+                color = Color.Gray,
+                fontSize = 16.sp
             )
 
             Spacer(modifier = Modifier.weight(1f))

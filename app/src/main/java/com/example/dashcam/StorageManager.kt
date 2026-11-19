@@ -98,6 +98,27 @@ object StorageManager {
         return null
     }
 
+    fun getFolderSizeMB(context: Context): Long {
+        var totalSizeBytes = 0L
+        val projection = arrayOf(MediaStore.Video.Media.SIZE)
+        val selection = "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ?"
+        val selectionArgs = arrayOf("%${Environment.DIRECTORY_MOVIES}/$FOLDER_NAME%")
+
+        context.contentResolver.query(
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+            while (cursor.moveToNext()) {
+                totalSizeBytes += cursor.getLong(sizeCol)
+            }
+        }
+        return totalSizeBytes / (1024 * 1024)
+    }
+
     private fun deleteVideo(context: Context, id: Long) {
         val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
         context.contentResolver.delete(uri, null, null)

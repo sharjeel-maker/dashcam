@@ -58,6 +58,12 @@ class DashcamService : LifecycleService() {
     private var sessionStartTime = 0L
     private var timerJob: Job? = null
     private var lastNotificationTime = 0L
+    
+    private var isCameraReady = false
+    private var pendingStart = false
+    
+    private val _storageUsedMB = MutableStateFlow(0L)
+    val storageUsedMB: StateFlow<Long> = _storageUsedMB.asStateFlow()
     inner class LocalBinder : Binder() {
         fun getService(): DashcamService = this@DashcamService
     }
@@ -104,6 +110,11 @@ class DashcamService : LifecycleService() {
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     videoCapture
                 )
+                isCameraReady = true
+                if (pendingStart) {
+                    pendingStart = false
+                    startRecordingSequence()
+                }
             } catch (exc: Exception) {
                 Log.e("DashcamService", "Use case binding failed", exc)
             }
@@ -154,6 +165,10 @@ class DashcamService : LifecycleService() {
     }
 
     private fun startRecordingSequence() {
+        if (!isCameraReady) {
+            pendingStart = true
+            return
+        }
         if (_isRecording.value) return
 
         startForeground(1, createNotification())
@@ -166,6 +181,9 @@ class DashcamService : LifecycleService() {
         lastNotificationTime = sessionStartTime
         timerJob?.cancel()
         timerJob = lifecycleScope.launch {
+            // Initial fetch
+            _storageUsedMB.value = StorageManager.getFolderSizeMB(this@DashcamService)
+            
             while (true) {
                 val now = System.currentTimeMillis()
                 _recordingDuration.value = now - sessionStartTime
@@ -174,6 +192,11 @@ class DashcamService : LifecycleService() {
                 if (now - lastNotificationTime >= 1800000L) {
                     lastNotificationTime = now
                     sendUpdateNotification()
+                }
+                
+                // Update storage every 10 seconds (roughly)
+                if (now / 1000 % 10 == 0L) {
+                    _storageUsedMB.value = StorageManager.getFolderSizeMB(this@DashcamService)
                 }
                 
                 delay(1000)
