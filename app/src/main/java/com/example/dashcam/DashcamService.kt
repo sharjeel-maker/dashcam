@@ -101,7 +101,13 @@ class DashcamService : LifecycleService() {
                 .setQualitySelector(QualitySelector.from(Quality.HD))
                 .build()
             
-            val vCap = VideoCapture.withOutput(recorder)
+            val vCapBuilder = VideoCapture.Builder(recorder)
+            androidx.camera.camera2.interop.Camera2Interop.Extender(vCapBuilder)
+                .setCaptureRequestOption(
+                    android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+                    android.util.Range(Constants.FPS, Constants.FPS)
+                )
+            val vCap = vCapBuilder.build()
             videoCapture = vCap
 
             // Create timestamp overlay effect on recorded video frames
@@ -195,12 +201,8 @@ class DashcamService : LifecycleService() {
             }
         }
 
-        // 4. Schedule this segment to stop after SEGMENT_DURATION_MS
+        // Single continuous video file (no auto-splitting into 5 min clips)
         segmentJob?.cancel()
-        segmentJob = lifecycleScope.launch {
-            delay(Constants.SEGMENT_DURATION_MS)
-            activeRecording?.stop() // This triggers the Finalize event above, continuing the loop
-        }
     }
 
     private fun startRecordingSequence() {
