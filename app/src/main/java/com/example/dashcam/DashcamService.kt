@@ -98,7 +98,7 @@ class DashcamService : LifecycleService() {
             
             // Set Quality to SD (480p) for max battery/storage savings
             val recorder = Recorder.Builder()
-                .setQualitySelector(QualitySelector.from(Quality.SD, androidx.camera.video.FallbackStrategy.higherQualityOrLowerQuality(Quality.SD)))
+                .setQualitySelector(QualitySelector.from(Quality.SD))
                 .build()
             
             val vCapBuilder = VideoCapture.Builder(recorder)
