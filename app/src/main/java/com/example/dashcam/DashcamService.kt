@@ -1,0 +1,250 @@
+package com.example.dashcam
+
+import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
+import android.os.Binder
+import android.os.Build
+import android.os.Environment
+import android.os.IBinder
+import android.os.PowerManager
+import android.provider.MediaStore
+import android.util.Log
+import androidx.camera.core.CameraSelector
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.MediaStoreOutputOptions
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
+import androidx.camera.video.VideoRecordEvent
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+class DashcamService : LifecycleService() {
+
+    private val binder = LocalBinder()
+    
+    private var videoCapture: VideoCapture<Recorder>? = null
+    private var activeRecording: Recording? = null
+    private var segmentJob: Job? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    // State exposed to UI
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+
+    private val _recordingDuration = MutableStateFlow(0L)
+    val recordingDuration: StateFlow<Long> = _recordingDuration.asStateFlow()
+
+    private var isIntendedToKeepRecording = false
+    private var sessionStartTime = 0L
+    private var timerJob: Job? = null
+
+    inner class LocalBinder : Binder() {
+        fun getService(): DashcamService = this@DashcamService
+    }
+
+    override fun onBind(intent: Intent): IBinder {
+        super.onBind(intent)
+        return binder
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+        setupCamera()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        
+        when (intent?.action) {
+            "START" -> startRecordingSequence()
+            "STOP" -> stopRecordingSequence()
+        }
+        
+        // Handle being killed
+        return START_STICKY
+    }
+
+    private fun setupCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+            
+            // Set Quality to HD (720p). CameraX handles bitrate inside the Quality profile.
+            val recorder = Recorder.Builder()
+                .setQualitySelector(QualitySelector.from(Quality.HD))
+                .build()
+            
+            videoCapture = VideoCapture.withOutput(recorder)
+
+            try {
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    this,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    videoCapture
+                )
+            } catch (exc: Exception) {
+                Log.e("DashcamService", "Use case binding failed", exc)
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startNextSegment() {
+        if (!isIntendedToKeepRecording) return
+
+        // 1. Check storage limits before starting a file
+        StorageManager.cleanup(this)
+
+        // 2. Prep MediaStore output
+        val name = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date())
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+            put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/Dashcam")
+        }
+
+        val outputOptions = MediaStoreOutputOptions
+            .Builder(contentResolver, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+            .setContentValues(contentValues)
+            .build()
+
+        // 3. Start recording
+        val recording = videoCapture?.output?.prepareRecording(this, outputOptions)
+        
+        // Note: Audio is disabled by default per constraints, can add .withAudioEnabled() if requested
+        
+        activeRecording = recording?.start(ContextCompat.getMainExecutor(this)) { event ->
+            if (event is VideoRecordEvent.Finalize) {
+                activeRecording = null
+                // If we didn't manually stop the whole sequence, start the next segment immediately
+                if (isIntendedToKeepRecording) {
+                    startNextSegment()
+                }
+            }
+        }
+
+        // 4. Schedule this segment to stop after SEGMENT_DURATION_MS
+        segmentJob?.cancel()
+        segmentJob = lifecycleScope.launch {
+            delay(Constants.SEGMENT_DURATION_MS)
+            activeRecording?.stop() // This triggers the Finalize event above, continuing the loop
+        }
+    }
+
+    private fun startRecordingSequence() {
+        if (_isRecording.value) return
+
+        startForeground(1, createNotification())
+        acquireWakeLock()
+        
+        isIntendedToKeepRecording = true
+        _isRecording.value = true
+        
+        sessionStartTime = System.currentTimeMillis()
+        timerJob?.cancel()
+        timerJob = lifecycleScope.launch {
+            while (true) {
+                _recordingDuration.value = System.currentTimeMillis() - sessionStartTime
+                delay(1000)
+            }
+        }
+
+        startNextSegment()
+    }
+
+    private fun stopRecordingSequence() {
+        isIntendedToKeepRecording = false
+        _isRecording.value = false
+        
+        timerJob?.cancel()
+        _recordingDuration.value = 0L
+        
+        segmentJob?.cancel()
+        activeRecording?.stop()
+        
+        releaseWakeLock()
+        
+        // Final cleanup
+        StorageManager.cleanup(this)
+        
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "dashcam_channel",
+                "Dashcam Recording",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun createNotification(): android.app.Notification {
+        val stopIntent = Intent(this, DashcamService::class.java).apply {
+            action = "STOP"
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this, 0, stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val mainIntent = Intent(this, MainActivity::class.java)
+        val mainPendingIntent = PendingIntent.getActivity(
+            this, 0, mainIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        return NotificationCompat.Builder(this, "dashcam_channel")
+            .setContentTitle("Dashcam Recording")
+            .setContentText("Tap to open app, or Stop to end.")
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setContentIntent(mainPendingIntent)
+            .addAction(android.R.drawable.ic_media_pause, "Stop", stopPendingIntent)
+            .setOngoing(true)
+            .build()
+    }
+
+    @SuppressLint("WakelockTimeout")
+    private fun acquireWakeLock() {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Dashcam::RecordingWakeLock")
+        wakeLock?.acquire()
+    }
+
+    private fun releaseWakeLock() {
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopRecordingSequence()
+    }
+}
