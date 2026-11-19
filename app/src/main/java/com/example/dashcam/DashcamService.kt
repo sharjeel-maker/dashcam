@@ -109,8 +109,13 @@ class DashcamService : LifecycleService() {
                 androidx.camera.effects.OverlayEffect.VIDEO_CAPTURE,
                 0,
                 android.os.Handler(android.os.Looper.getMainLooper())
-            ) { canvas ->
+            ) { error ->
+                Log.e("DashcamService", "OverlayEffect error", error)
+            }
+
+            overlayEffect.setOnDrawListener { frame ->
                 try {
+                    val canvas = frame.overlayCanvas
                     val height = canvas.height
 
                     val paint = android.graphics.Paint().apply {
