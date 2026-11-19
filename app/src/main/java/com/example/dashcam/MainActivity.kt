@@ -231,7 +231,8 @@ class MainActivity : ComponentActivity() {
                             .fillMaxWidth()
                             .heightIn(max = 400.dp)
                     ) {
-                        androidx.compose.foundation.lazy.items(videoList) { video ->
+                        items(count = videoList.size) { index ->
+                            val video = videoList[index]
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -263,7 +264,7 @@ class MainActivity : ComponentActivity() {
                                     Text("Delete", fontSize = 12.sp, color = Color.White)
                                 }
                             }
-                            Divider(color = Color.LightGray.copy(alpha = 0.3f))
+                            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
                         }
                     }
                 }
