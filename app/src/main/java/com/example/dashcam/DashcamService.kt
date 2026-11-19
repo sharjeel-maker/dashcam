@@ -245,10 +245,19 @@ class DashcamService : LifecycleService() {
     }
 
     private fun sendUpdateNotification() {
+        val stopIntent = Intent(this, DashcamService::class.java).apply {
+            action = "STOP"
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this, 0, stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val notification = NotificationCompat.Builder(this, "dashcam_update_channel")
-            .setContentTitle("Dashcam is running")
-            .setContentText("Still recording smoothly in the background.")
+            .setContentTitle("Dashcam 30m Status")
+            .setContentText("Still recording in background. Storage used: ${_storageUsedMB.value} MB")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .addAction(android.R.drawable.ic_media_pause, "STOP RECORDING", stopPendingIntent)
             .setAutoCancel(true)
             .build()
         val manager = getSystemService(NotificationManager::class.java)
@@ -271,11 +280,11 @@ class DashcamService : LifecycleService() {
         )
 
         return NotificationCompat.Builder(this, "dashcam_channel")
-            .setContentTitle("Dashcam Recording")
-            .setContentText("Tap to open app, or Stop to end.")
+            .setContentTitle("Dashcam Recording Active")
+            .setContentText("Tap to open app, or tap STOP RECORDING below.")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentIntent(mainPendingIntent)
-            .addAction(android.R.drawable.ic_media_pause, "Stop", stopPendingIntent)
+            .addAction(android.R.drawable.ic_media_pause, "STOP RECORDING", stopPendingIntent)
             .setOngoing(true)
             .build()
     }

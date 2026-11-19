@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
 
-    private var dashcamService: DashcamService? = null
+    private var dashcamService by mutableStateOf<DashcamService?>(null)
     private var isBound by mutableStateOf(false)
 
     private val connection = object : ServiceConnection {
@@ -137,6 +137,7 @@ class MainActivity : ComponentActivity() {
                     } else {
                         StorageManager.cleanup(this@MainActivity) // Clean on start
                         sendCommandToService("START")
+                        moveTaskToBack(true)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(

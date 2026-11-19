@@ -100,6 +100,27 @@ object StorageManager {
 
     fun getFolderSizeMB(context: Context): Long {
         var totalSizeBytes = 0L
+        
+        // Method 1: Direct File directory check
+        try {
+            val folder = java.io.File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+                FOLDER_NAME
+            )
+            if (folder.exists() && folder.isDirectory) {
+                val files = folder.listFiles()
+                if (files != null && files.isNotEmpty()) {
+                    val directSize = files.sumOf { it.length() }
+                    if (directSize > 0) {
+                        return directSize / (1024 * 1024)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking direct folder size", e)
+        }
+
+        // Method 2: MediaStore fallback
         val projection = arrayOf(MediaStore.Video.Media.SIZE)
         val selection = "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ?"
         val selectionArgs = arrayOf("%${Environment.DIRECTORY_MOVIES}/$FOLDER_NAME%")
