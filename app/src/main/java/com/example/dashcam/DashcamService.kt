@@ -96,9 +96,9 @@ class DashcamService : LifecycleService() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
             
-            // Set Quality to HD (720p). CameraX handles bitrate inside the Quality profile.
+            // Set Quality to SD (480p) for max battery/storage savings
             val recorder = Recorder.Builder()
-                .setQualitySelector(QualitySelector.from(Quality.HD))
+                .setQualitySelector(QualitySelector.from(Quality.SD, androidx.camera.video.FallbackStrategy.higherQualityOrLowerQuality(Quality.SD)))
                 .build()
             
             val vCapBuilder = VideoCapture.Builder(recorder)
