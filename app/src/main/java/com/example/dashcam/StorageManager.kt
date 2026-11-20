@@ -63,7 +63,7 @@ object StorageManager {
                 }
             }
 
-            // 2. Enforce MAX_FOLDER_SIZE (Keep deleting oldest until under limit)
+            // 2. Enforce MAX_FOLDER_SIZE (Keep deleting oldest normal videos until under limit)
             // Note: the list is already sorted DATE_ADDED ASC
             val sizeIterator = videos.iterator()
             while (sizeIterator.hasNext() && totalSizeBytes > Constants.MAX_FOLDER_SIZE_BYTES) {
@@ -72,6 +72,28 @@ object StorageManager {
                 totalSizeBytes -= video.size
                 sizeIterator.remove()
                 Log.d(TAG, "Deleted video for space: ${video.id}")
+            }
+
+            // 3. Clean up EMERGENCY videos older than RETENTION_DAYS (30 days)
+            val emergencySelection = "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ? AND ${MediaStore.Video.Media.DISPLAY_NAME} LIKE 'EMERGENCY_%'"
+            context.contentResolver.query(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                emergencySelection,
+                selectionArgs,
+                null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val dateAdded = cursor.getLong(dateCol) // in seconds
+                    if (dateAdded < cutoffDate) {
+                        deleteVideo(context, id)
+                        Log.d(TAG, "Deleted 30+ day old emergency video: $id")
+                    }
+                }
             }
 
         } catch (e: Exception) {
