@@ -310,7 +310,17 @@ class MainActivity : ComponentActivity() {
             try {
                 context.startActivity(shareIntent)
             } catch (e: Exception) {
-                Toast.makeText(context, "WhatsApp is not installed.", Toast.LENGTH_SHORT).show()
+                // Fallback to generic share chooser if WhatsApp is not installed
+                try {
+                    val genericShare = Intent(Intent.ACTION_SEND).apply {
+                        type = "video/mp4"
+                        putExtra(Intent.EXTRA_STREAM, latestVideoUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(genericShare, "Share Clip"))
+                } catch (e2: Exception) {
+                    Toast.makeText(context, "No app available to share video.", Toast.LENGTH_SHORT).show()
+                }
             }
         } else {
             Toast.makeText(context, "No clips found to share.", Toast.LENGTH_SHORT).show()
@@ -318,13 +328,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun sendCommandToService(action: String) {
-        val intent = Intent(this, DashcamService::class.java).apply {
-            this.action = action
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+        try {
+            val intent = Intent(this, DashcamService::class.java).apply {
+                this.action = action
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Service error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -339,14 +353,14 @@ class MainActivity : ComponentActivity() {
             startActivity(intent)
         } catch (e: Exception) {
             try {
-                // Second try: Generic fallback to file manager
+                // Second try: Generic fallback to file manager or video picker chooser
                 val genericIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
                     type = "video/mp4"
                 }
-                startActivity(genericIntent)
+                startActivity(Intent.createChooser(genericIntent, "Open Recordings"))
             } catch (e2: Exception) {
                 // Final fallback
-                Toast.makeText(this, "Clips saved in Movies/Dashcam", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Clips saved in Movies/Dashcam folder", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -358,12 +372,20 @@ class MainActivity : ComponentActivity() {
         }
         val wazeIntent = packageManager.getLaunchIntentForPackage("com.waze")
         if (wazeIntent != null) {
-            startActivity(wazeIntent)
+            try {
+                startActivity(wazeIntent)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Unable to launch Waze app", Toast.LENGTH_SHORT).show()
+            }
         } else {
             try {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.waze")))
             } catch (e: Exception) {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.waze")))
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.waze")))
+                } catch (e2: Exception) {
+                    Toast.makeText(this, "Waze app is not installed on this device.", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
