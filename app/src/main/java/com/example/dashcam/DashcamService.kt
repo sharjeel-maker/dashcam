@@ -124,11 +124,11 @@ class DashcamService : LifecycleService() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
             
-            // Configure lightweight Recorder (Quality.SD 480p + 800 kbps target bitrate)
-            // 800 kbps = ~100 KB/s (~1 MB for 10 seconds, ~30 MB for 5-minute clips)
+            // Configure HD 720p Recorder with 2 Mbps target bitrate for sharp, readable license plates
+            // 2 Mbps = ~250 KB/s (~2.5 MB for 10 seconds, ~75 MB for 5-minute clips)
             val recorder = Recorder.Builder()
-                .setQualitySelector(QualitySelector.from(Quality.SD))
-                .setTargetVideoEncodingBitRate(800_000)
+                .setQualitySelector(QualitySelector.from(Quality.HD))
+                .setTargetVideoEncodingBitRate(2_000_000)
                 .build()
             
             val vCapBuilder = VideoCapture.Builder(recorder)
