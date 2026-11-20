@@ -102,10 +102,11 @@ class DashcamService : LifecycleService() {
                 .build()
             
             val vCapBuilder = VideoCapture.Builder(recorder)
+                .setTargetRotation(android.view.Surface.ROTATION_90) // Force horizontal landscape FOV even when mounted vertically
             androidx.camera.camera2.interop.Camera2Interop.Extender(vCapBuilder)
                 .setCaptureRequestOption(
                     android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-                    android.util.Range(24, 30)
+                    android.util.Range(20, 24) // Smooth motion with low CPU/battery consumption
                 )
             val vCap = vCapBuilder.build()
             videoCapture = vCap
@@ -152,11 +153,23 @@ class DashcamService : LifecycleService() {
 
             try {
                 cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
+                val boundCamera = cameraProvider.bindToLifecycle(
                     this,
                     cameraSelector,
                     useCaseGroup
                 )
+
+                // Force minimum zoom ratio (0.5x Ultra-Wide lens on multi-camera devices)
+                val minZoom = boundCamera.cameraInfo.zoomState.value?.minZoomRatio ?: 1.0f
+                if (minZoom < 1.0f) {
+                    boundCamera.cameraControl.setZoomRatio(minZoom)
+                }
+                boundCamera.cameraInfo.zoomState.observe(this) { state ->
+                    if (state != null && state.minZoomRatio < 1.0f) {
+                        boundCamera.cameraControl.setZoomRatio(state.minZoomRatio)
+                    }
+                }
+
                 isCameraReady = true
                 if (pendingStart) {
                     pendingStart = false

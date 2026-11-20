@@ -5,7 +5,7 @@ object Constants {
     // These constants represent your targets, but standard CameraX will output standard HD bitrates).
     const val VIDEO_WIDTH = 854
     const val VIDEO_HEIGHT = 480
-    const val FPS = 30
+    const val FPS = 20
     const val BITRATE = 800000
 
     const val RECORD_AUDIO = false
