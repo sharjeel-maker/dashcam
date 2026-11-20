@@ -10,8 +10,8 @@ object Constants {
 
     const val RECORD_AUDIO = false
 
-    // Single continuous video recording (no auto-splitting into 5 min clips)
-    const val SEGMENT_DURATION_MS = -1L
+    // 5-minute video clips (seamless continuous recording)
+    const val SEGMENT_DURATION_MS = 5L * 60L * 1000L
 
     // Storage limits
     const val MAX_FOLDER_SIZE_GB = 2L

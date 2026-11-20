@@ -148,11 +148,13 @@ class DashcamService : LifecycleService() {
                 .addEffect(overlayEffect)
                 .build()
 
+            val cameraSelector = getWidestBackCameraSelector(cameraProvider)
+
             try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
                     this,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    cameraSelector,
                     useCaseGroup
                 )
                 isCameraReady = true
@@ -164,6 +166,33 @@ class DashcamService : LifecycleService() {
                 Log.e("DashcamService", "Use case binding failed", exc)
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun getWidestBackCameraSelector(cameraProvider: ProcessCameraProvider): CameraSelector {
+        val cameraInfos = cameraProvider.availableCameraInfos
+        var bestCameraInfo: androidx.camera.core.CameraInfo? = null
+        var minFocalLength = Float.MAX_VALUE
+
+        for (info in cameraInfos) {
+            try {
+                val camera2Info = androidx.camera.camera2.interop.Camera2CameraInfo.from(info)
+                val lensFacing = camera2Info.getCameraCharacteristic(android.hardware.camera2.CameraCharacteristics.LENS_FACING)
+                if (lensFacing == android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK) {
+                    val focalLengths = camera2Info.getCameraCharacteristic(android.hardware.camera2.CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+                    if (focalLengths != null && focalLengths.isNotEmpty()) {
+                        val minFocal = focalLengths.minOrNull() ?: Float.MAX_VALUE
+                        if (minFocal < minFocalLength) {
+                            minFocalLength = minFocal
+                            bestCameraInfo = info
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("DashcamService", "Error checking focal length for camera info", e)
+            }
+        }
+
+        return bestCameraInfo?.cameraSelector ?: CameraSelector.DEFAULT_BACK_CAMERA
     }
 
     @SuppressLint("MissingPermission")
@@ -201,8 +230,14 @@ class DashcamService : LifecycleService() {
             }
         }
 
-        // Single continuous video file (no auto-splitting into 5 min clips)
+        // 4. Schedule 5-minute segment rotation
         segmentJob?.cancel()
+        if (Constants.SEGMENT_DURATION_MS > 0) {
+            segmentJob = lifecycleScope.launch {
+                delay(Constants.SEGMENT_DURATION_MS)
+                activeRecording?.stop()
+            }
+        }
     }
 
     private fun startRecordingSequence() {
