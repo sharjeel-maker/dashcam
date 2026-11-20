@@ -105,7 +105,7 @@ class DashcamService : LifecycleService() {
             androidx.camera.camera2.interop.Camera2Interop.Extender(vCapBuilder)
                 .setCaptureRequestOption(
                     android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-                    android.util.Range(Constants.FPS, Constants.FPS)
+                    android.util.Range(24, 30)
                 )
             val vCap = vCapBuilder.build()
             videoCapture = vCap
