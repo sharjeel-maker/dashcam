@@ -64,6 +64,34 @@ class DashcamService : LifecycleService() {
     
     private val _storageUsedMB = MutableStateFlow(0L)
     val storageUsedMB: StateFlow<Long> = _storageUsedMB.asStateFlow()
+
+    // G-Sensor (Accelerometer) for Emergency Impact Detection
+    private var sensorManager: android.hardware.SensorManager? = null
+    private var accelerometer: android.hardware.Sensor? = null
+    private var isEmergencyLocked = false
+    private var lastImpactTime = 0L
+    private val sensorListener = object : android.hardware.SensorEventListener {
+        override fun onSensorChanged(event: android.hardware.SensorEvent?) {
+            if (event == null || !_isRecording.value) return
+            val x = event.values[0]
+            val y = event.values[1]
+            val z = event.values[2]
+
+            // Acceleration force in Gs (1G = ~9.81 m/s^2)
+            val gForce = Math.sqrt((x * x + y * y + z * z).toDouble()) / android.hardware.SensorManager.GRAVITY_EARTH
+            
+            // Trigger emergency event on sudden impact / hard brake (> 2.2G)
+            if (gForce > 2.2) {
+                val now = System.currentTimeMillis()
+                if (now - lastImpactTime > 5000L) { // 5-second debounce
+                    lastImpactTime = now
+                    onImpactDetected(gForce)
+                }
+            }
+        }
+
+        override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+    }
     inner class LocalBinder : Binder() {
         fun getService(): DashcamService = this@DashcamService
     }
@@ -217,7 +245,9 @@ class DashcamService : LifecycleService() {
         StorageManager.cleanup(this)
 
         // 2. Prep MediaStore output
-        val name = "Dashcam_" + SimpleDateFormat("MMM-dd-yyyy_HH-mm-ss", Locale.US).format(Date())
+        val prefix = if (isEmergencyLocked) "EMERGENCY_" else ""
+        isEmergencyLocked = false // Reset lock flag for next file
+        val name = prefix + "Dashcam_" + SimpleDateFormat("MMM-dd-yyyy_HH-mm-ss", Locale.US).format(Date())
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
@@ -293,13 +323,60 @@ class DashcamService : LifecycleService() {
             }
         }
 
+        // Register G-Sensor Accelerometer
+        try {
+            sensorManager = getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager
+            accelerometer = sensorManager?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER)
+            accelerometer?.let {
+                sensorManager?.registerListener(sensorListener, it, android.hardware.SensorManager.SENSOR_DELAY_NORMAL)
+            }
+        } catch (e: Exception) {
+            Log.e("DashcamService", "G-Sensor registration failed", e)
+        }
+
         startNextSegment()
+    }
+
+    private fun onImpactDetected(gForce: Double) {
+        isEmergencyLocked = true
+        Log.w("DashcamService", "G-Sensor impact detected: $gForce Gs! Locking current clip.")
+
+        // Haptic feedback
+        try {
+            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(android.os.VibrationEffect.createOneShot(500, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(500)
+            }
+        } catch (e: Exception) {
+            Log.e("DashcamService", "Vibration error", e)
+        }
+
+        // Send Impact Notification
+        val notification = NotificationCompat.Builder(this, "dashcam_update_channel")
+            .setContentTitle("⚠️ Emergency Impact Detected (${String.format(Locale.US, "%.1f", gForce)}G)")
+            .setContentText("Current video clip has been LOCKED and protected from deletion.")
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(3, notification)
     }
 
     private fun stopRecordingSequence() {
         isIntendedToKeepRecording = false
         _isRecording.value = false
         
+        // Unregister G-Sensor
+        try {
+            sensorManager?.unregisterListener(sensorListener)
+        } catch (e: Exception) {
+            Log.e("DashcamService", "Unregister sensor error", e)
+        }
+
         timerJob?.cancel()
         _recordingDuration.value = 0L
         

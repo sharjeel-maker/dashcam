@@ -21,8 +21,8 @@ object StorageManager {
                 MediaStore.Video.Media.DATE_ADDED
             )
 
-            // Look for videos in Movies/Dashcam
-            val selection = "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ?"
+            // Look for normal videos in Movies/Dashcam (Exclude protected EMERGENCY files)
+            val selection = "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ? AND ${MediaStore.Video.Media.DISPLAY_NAME} NOT LIKE 'EMERGENCY_%'"
             val selectionArgs = arrayOf("%${Environment.DIRECTORY_MOVIES}/$FOLDER_NAME%")
             val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} ASC"
 
