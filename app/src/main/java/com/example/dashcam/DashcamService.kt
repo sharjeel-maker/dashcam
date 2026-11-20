@@ -139,7 +139,19 @@ class DashcamService : LifecycleService() {
                 )
                 .setCaptureRequestOption(
                     android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-                    android.util.Range(24, 30) // Fast shutter & 24-30 FPS eliminates motion blur on moving license plates
+                    android.util.Range(30, 30) // Fixed 30 FPS forces high shutter speed (1/60s-1/500s) to freeze moving license plates across all lanes
+                )
+                .setCaptureRequestOption(
+                    android.hardware.camera2.CaptureRequest.EDGE_MODE,
+                    android.hardware.camera2.CaptureRequest.EDGE_MODE_HIGH_QUALITY // Hardware edge enhancement sharpens license plate letters/numbers
+                )
+                .setCaptureRequestOption(
+                    android.hardware.camera2.CaptureRequest.NOISE_REDUCTION_MODE,
+                    android.hardware.camera2.CaptureRequest.NOISE_REDUCTION_MODE_HIGH_QUALITY // Cleans pixel noise around dark bumper/plate areas
+                )
+                .setCaptureRequestOption(
+                    android.hardware.camera2.CaptureRequest.CONTROL_AE_ANTIBANDING_MODE,
+                    android.hardware.camera2.CaptureRequest.CONTROL_AE_ANTIBANDING_MODE_AUTO // Prevents LED lighting flicker on plates
                 )
             val vCap = vCapBuilder.build()
             videoCapture = vCap
