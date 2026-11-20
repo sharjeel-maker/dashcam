@@ -96,9 +96,20 @@ class DashcamService : LifecycleService() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
             
-            // Set Quality to SD (480p) for max battery/storage savings
+            // Configure lightweight VideoSpec (Quality.SD + 800 kbps bitrate cap)
+            // 800 kbps = ~100 KB/s (~1 MB for 10 seconds, ~30 MB for 5-minute clips)
+            val videoSpec = androidx.camera.video.VideoSpec.builder()
+                .setQualitySelector(
+                    QualitySelector.from(
+                        Quality.SD,
+                        androidx.camera.video.FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+                    )
+                )
+                .setBitrate(android.util.Range(600_000, 1_000_000))
+                .build()
+
             val recorder = Recorder.Builder()
-                .setQualitySelector(QualitySelector.from(Quality.SD))
+                .setVideoSpec(videoSpec)
                 .build()
             
             val vCapBuilder = VideoCapture.Builder(recorder)
