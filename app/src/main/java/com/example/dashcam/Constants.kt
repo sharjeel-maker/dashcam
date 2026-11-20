@@ -14,7 +14,8 @@ object Constants {
     const val SEGMENT_DURATION_MS = 5L * 60L * 1000L
 
     // Storage limits
-    const val MAX_FOLDER_SIZE_GB = 2L
+    const val MAX_FOLDER_SIZE_GB = 4L
     const val MAX_FOLDER_SIZE_BYTES = MAX_FOLDER_SIZE_GB * 1024L * 1024L * 1024L
-    const val RETENTION_DAYS = 30
+    const val RETENTION_DAYS = 7
+    const val EMERGENCY_RETENTION_DAYS = 30
 }

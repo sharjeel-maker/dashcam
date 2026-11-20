@@ -74,7 +74,8 @@ object StorageManager {
                 Log.d(TAG, "Deleted video for space: ${video.id}")
             }
 
-            // 3. Clean up EMERGENCY videos older than RETENTION_DAYS (30 days)
+            // 3. Clean up EMERGENCY videos older than EMERGENCY_RETENTION_DAYS (30 days)
+            val emergencyCutoffDate = (System.currentTimeMillis() / 1000L) - (Constants.EMERGENCY_RETENTION_DAYS * 24 * 60 * 60)
             val emergencySelection = "${MediaStore.Video.Media.RELATIVE_PATH} LIKE ? AND ${MediaStore.Video.Media.DISPLAY_NAME} LIKE 'EMERGENCY_%'"
             context.contentResolver.query(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
@@ -89,7 +90,7 @@ object StorageManager {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val dateAdded = cursor.getLong(dateCol) // in seconds
-                    if (dateAdded < cutoffDate) {
+                    if (dateAdded < emergencyCutoffDate) {
                         deleteVideo(context, id)
                         Log.d(TAG, "Deleted 30+ day old emergency video: $id")
                     }
