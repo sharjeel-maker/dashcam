@@ -6,7 +6,7 @@ object Constants {
     const val VIDEO_WIDTH = 1920
     const val VIDEO_HEIGHT = 1080
     const val FPS = 30
-    const val BITRATE = 5000000
+    const val BITRATE = 2700000
 
     const val RECORD_AUDIO = false
 
