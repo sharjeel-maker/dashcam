@@ -124,18 +124,22 @@ class DashcamService : LifecycleService() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
             
-            // Configure HD 720p Recorder with 2 Mbps target bitrate for sharp, readable license plates
-            // 2 Mbps = ~250 KB/s (~2.5 MB for 10 seconds, ~75 MB for 5-minute clips)
+            // Configure Full HD 1080p Recorder with 5 Mbps target bitrate for crystal clear license plate reading
+            // 5 Mbps = ~625 KB/s (~180 MB per 5-minute clip, ~2 GB per hour)
             val recorder = Recorder.Builder()
-                .setQualitySelector(QualitySelector.from(Quality.HD))
-                .setTargetVideoEncodingBitRate(2_000_000)
+                .setQualitySelector(QualitySelector.fromOrderedList(listOf(Quality.FHD, Quality.HD, Quality.SD)))
+                .setTargetVideoEncodingBitRate(5_000_000)
                 .build()
             
             val vCapBuilder = VideoCapture.Builder(recorder)
             androidx.camera.camera2.interop.Camera2Interop.Extender(vCapBuilder)
                 .setCaptureRequestOption(
+                    android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE,
+                    android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO
+                )
+                .setCaptureRequestOption(
                     android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-                    android.util.Range(20, 24) // Smooth motion with low CPU/battery consumption
+                    android.util.Range(24, 30) // Fast shutter & 24-30 FPS eliminates motion blur on moving license plates
                 )
             val vCap = vCapBuilder.build()
             videoCapture = vCap
