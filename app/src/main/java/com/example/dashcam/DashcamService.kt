@@ -102,7 +102,6 @@ class DashcamService : LifecycleService() {
                 .build()
             
             val vCapBuilder = VideoCapture.Builder(recorder)
-                .setTargetRotation(android.view.Surface.ROTATION_90) // Force horizontal landscape FOV even when mounted vertically
             androidx.camera.camera2.interop.Camera2Interop.Extender(vCapBuilder)
                 .setCaptureRequestOption(
                     android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
