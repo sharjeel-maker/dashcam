@@ -135,7 +135,11 @@ class DashcamService : LifecycleService() {
             androidx.camera.camera2.interop.Camera2Interop.Extender(vCapBuilder)
                 .setCaptureRequestOption(
                     android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE,
-                    android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO
+                    android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE_OFF // Disable autofocus hunting/blurring
+                )
+                .setCaptureRequestOption(
+                    android.hardware.camera2.CaptureRequest.LENS_FOCUS_DISTANCE,
+                    0.0f // 0.0f diopters = Fixed Infinity/Hyperfocal focus (Sharp focus from 1m to infinity with ZERO hunting)
                 )
                 .setCaptureRequestOption(
                     android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
