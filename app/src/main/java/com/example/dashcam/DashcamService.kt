@@ -215,6 +215,20 @@ class DashcamService : LifecycleService() {
                     }
                 }
 
+                // Lock Auto-Focus and Auto-Exposure metering strictly on the center-upper road (0.5, 0.4)
+                // disableAutoCancel() locks focus onto license plates ahead and prevents focus hunting on windshield glare/dust
+                try {
+                    val factory = androidx.camera.core.SurfaceOrientedMeteringPointFactory(1.0f, 1.0f)
+                    val roadPoint = factory.createPoint(0.5f, 0.4f)
+                    val focusAction = androidx.camera.core.FocusMeteringAction.Builder(
+                        roadPoint,
+                        androidx.camera.core.FocusMeteringAction.FLAG_AF or androidx.camera.core.FocusMeteringAction.FLAG_AE
+                    ).disableAutoCancel().build()
+                    boundCamera.cameraControl.startFocusAndMetering(focusAction)
+                } catch (e: Exception) {
+                    Log.e("DashcamService", "Failed to start road focus metering", e)
+                }
+
                 isCameraReady = true
                 if (pendingStart) {
                     pendingStart = false
